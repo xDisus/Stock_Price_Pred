@@ -18,7 +18,7 @@ import os
 from tqdm import tqdm
 
 
-# In[62]:
+# In[2]:
 
 
 class stockPred:
@@ -41,13 +41,14 @@ class stockPred:
     def predDays(self,stock,days):
         self.days = days
         self.stock = stock
-        self.df[str(stock)+'_shift'+str(days)] = self.df[str(stock)+'_Adj Close'].shift(-days)
-        self.df_dropna = self.df.dropna()
-        return self.df, self.df_dropna
+        self.df_pred = self.df.copy()
+        self.df_pred[str(stock)+'_shift'+str(days)] = self.df_pred[str(stock)+'_Adj Close'].shift(-days)
+        self.df_dropna = self.df_pred.dropna(inplace=False)
+        return self.df_pred, self.df_dropna
     
     def trainTest(self):
         self.X_dropna = self.df_dropna.drop([str(self.stock)+'_shift'+str(self.days)], 1)
-        self.X = self.df.drop([str(self.stock)+'_shift'+str(self.days)], 1)
+        self.X = self.df_pred.drop([str(self.stock)+'_shift'+str(self.days)], 1)
         self.Y_dropna = self.df_dropna[str(self.stock)+'_shift'+str(self.days)]
         self.X_train, self.X_test, self.Y_train, self.Y_test = train_test_split(self.X_dropna, self.Y_dropna, test_size=0.8)
         return self.X_dropna, self.X
@@ -68,6 +69,7 @@ class stockPred:
         self.base_date = dt.datetime.strptime(base_date, "%d/%m/%y")
         self.clf = RandomForestRegressor(max_depth=100, random_state=0,n_estimators=300, n_jobs = -1)
         self.clf.fit(self.X_train, self.Y_train)
+        #print(self.X.tail())
         self.prediction = (self.clf.predict(self.X.loc[self.base_date:self.base_date]))
         self.pred_day = self.date_by_adding_business_days()
         if verbose == 1:
@@ -79,7 +81,7 @@ class stockPred:
         
 
 
-# In[41]:
+# In[3]:
 
 
 #Stating the class, setting starting date, building db
@@ -89,44 +91,44 @@ y = x.stockAdd('JBSS3.SA')
 #y = x.stockAdd('^BVSP')
 
 
-# In[64]:
+# In[79]:
 
 
 #predicting stock pricing for the next N days
 
-x = stockPred('01/01/15')
+x = stockPred('01/01/18')
 y = x.stockAdd('JBSS3.SA')
+#y = x.stockAdd('^BVSP')
 
 pred_list = []
 day_list = []
-for i in tqdm(range(1,3)):
+for i in tqdm(range(1,20)):
     x.predDays('JBSS3.SA',i)
     x.trainTest()
-    a,pred,dia = x.trainModel('20/09/19',verbose =0)
-    pred_list.append(pred)
+    a,pred,dia = x.trainModel('10/09/19',verbose =0)
+    pred_list.append(round(pred[0],2))
     day_list.append(dia)
     
 for a,b in zip(day_list,pred_list):
-    print('Data:{} - Valor {}'.format(a,b))
+    print('Data:{0} - Valor {1:.2f}'.format(a.strftime('%d/%m/%y'),b))
+    
+y['Data'] = y.index
+
+df_pred = pd.DataFrame(data=pred_list,index=day_list,columns=['Pred'])
+df_pred['Data'] = df_pred.index
+
+result = pd.merge(y,df_pred[['Pred','Data']], on= 'Data' , how='outer')
 
 
-# In[54]:
+# In[86]:
 
 
-#y = x.stockAdd('JBSS3.SA')
-
-
-# In[13]:
-
-
-w = y['JBSS3.SA_Adj Close'].loc['2019-09-16':'2019-09-23']
-
-
-# In[14]:
-
-
-#w['Pred'] = pred_list
-w.head(10)
+last_x_days = 20
+plt.figure(num=None, figsize=(15, 6), dpi=80, facecolor='w', edgecolor='k')
+plt.plot(result['Data'].iloc[-last_x_days*5:-last_x_days+2], result['JBSS3.SA_Adj Close'].iloc[-last_x_days*5:-last_x_days+2], color = 'black')
+plt.plot(result['Data'].iloc[-last_x_days:], result['JBSS3.SA_Adj Close'].iloc[-last_x_days:], color = 'red')
+plt.plot(result['Data'].iloc[-last_x_days:], result['Pred'].iloc[-last_x_days:])
+plt.show()
 
 
 # In[ ]:
